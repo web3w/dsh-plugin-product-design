@@ -43,9 +43,9 @@
     }
   },
   "scripts": {
-    "build:client": "esbuild client/entry.mjs --bundle --platform=browser --format=esm --external:react --banner:js=\"import React from 'react'; const require = (id) => id === 'react' ? React : (() => { throw new Error('Unexpected external module: ' + id); })();\" --outfile=lib/client.js",
+    "build:client": "node scripts/build-client.mjs",
     "build": "npm run build:client && npm run check",
-    "check": "node --check index.mjs && node --check skills.mjs && node --check client/entry.mjs && node --check client/index.cjs && node --check client/panel.cjs && node --check client/preview-url.cjs && node --check client/trigger.cjs && node --check lib/client.js && node --check scripts/bootstrap-prototype.mjs && node --check skills/user-context/scripts/user-context-preflight.mjs && node --check skills/user-context/scripts/user-context-init.mjs",
+    "check": "node --check index.mjs && node --check skills.mjs && node --check client/entry.mjs && node --check client/index.cjs && node --check client/panel.cjs && node --check client/preview-url.cjs && node --check client/trigger.cjs && node --check lib/client.js && node --check scripts/build-client.mjs && node --check scripts/bootstrap-prototype.mjs && node --check skills/user-context/scripts/user-context-preflight.mjs && node --check skills/user-context/scripts/user-context-init.mjs",
     "test": "node --test test/smoke.test.mjs"
   },
   "devDependencies": {

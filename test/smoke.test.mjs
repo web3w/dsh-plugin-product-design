@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const { createProductDesignTrigger, isProductDesignInvocation, PANEL_KIND } = require('../client/trigger.cjs');
@@ -22,6 +23,24 @@ const { resolveLocalPreviewUrl } = require('../client/preview-url.cjs');
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SKILLS_DIR = join(PLUGIN_ROOT, 'skills');
 const NODE = process.execPath;
+
+function captureBuiltClientRegistration() {
+  const registrations = [];
+  const filename = join(PLUGIN_ROOT, 'lib', 'client.js');
+  runInNewContext(readFileSync(filename, 'utf8'), {
+    window: { __ModuleLoader__: { load: registration => registrations.push(registration) } },
+  }, { filename });
+  assert.equal(registrations.length, 1);
+  return registrations[0];
+}
+
+function loadBuiltClient() {
+  const registration = captureBuiltClientRegistration();
+  return registration.factory(specifier => {
+    if (specifier === 'react') return {};
+    throw new Error(`Unexpected client external: ${specifier}`);
+  });
+}
 
 const EXPECTED_SKILLS = [
   'product-design',
@@ -224,7 +243,7 @@ test('skills.mjs builds an isolated provider config', async () => {
   assert.ok(existsSync(SKILLS_DIR));
 });
 
-test('mountProductDesignSkills degrades to a warning without the provider package', async () => {
+test('mountProductDesignSkills warns cleanly when provider import fails', async () => {
   const { mountProductDesignSkills } = await import('../skills.mjs');
   const warnings = [];
   let plugged = 0;
@@ -232,12 +251,28 @@ test('mountProductDesignSkills degrades to a warning without the provider packag
     logger: { warn: (message) => warnings.push(message) },
     plugin: () => { plugged += 1; },
   };
-  await mountProductDesignSkills(ctx);
-  // In the dev tree the peer dependency is not installed, so the dynamic
-  // import fails and the mount must degrade to exactly one warning.
+  await mountProductDesignSkills(ctx, async () => { throw new Error('simulated missing peer'); });
   assert.equal(plugged, 0);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /dsh-skill-filesystem unavailable/);
+});
+
+test('mountProductDesignSkills registers the provider with isolated config', async () => {
+  const { mountProductDesignSkills, SKILL_PROVIDER_NAME, SKILLS_DIR } = await import('../skills.mjs');
+  const provider = { name: 'mock-filesystem-provider' };
+  const warnings = [];
+  const registrations = [];
+  const ctx = {
+    logger: { warn: (message) => warnings.push(message) },
+    plugin: (plugin, config) => registrations.push({ plugin, config }),
+  };
+  await mountProductDesignSkills(ctx, async () => provider);
+  assert.equal(warnings.length, 0);
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0].plugin, provider);
+  assert.equal(registrations[0].config.providerName, SKILL_PROVIDER_NAME);
+  assert.equal(registrations[0].config.includeDefaultRoots, false);
+  assert.deepEqual(registrations[0].config.customSkillDirs, [SKILLS_DIR]);
 });
 
 test('index.mjs apply provides productDesign and honors enabled:false', async () => {
@@ -281,15 +316,23 @@ test('package.json declares DSH client dependencies and built bundle', () => {
   assert.ok(existsSync(join(PLUGIN_ROOT, 'lib', 'client.js')));
 });
 
-test('built browser module loads as ESM with the DSH client contract', async () => {
-  const client = await import('../lib/client.js');
+test('built browser bundle registers a lazy-CJS factory for the DSH loader', () => {
+  const registration = captureBuiltClientRegistration();
+  assert.equal(registration.id, 'dsh-plugin-product-design');
+  let externalCalls = 0;
+  const client = registration.factory(specifier => {
+    externalCalls++;
+    if (specifier === 'react') return {};
+    throw new Error(`Unexpected client external: ${specifier}`);
+  });
+  assert.equal(externalCalls, 1);
   assert.equal(client.name, 'dsh-plugin-product-design-client');
-  assert.deepEqual(client.inject, ['inputTriggers', 'sidebarRight', 'sidebarRightTabs', 'slots']);
+  assert.deepEqual(Array.from(client.inject), ['inputTriggers', 'sidebarRight', 'sidebarRightTabs', 'slots']);
   assert.equal(typeof client.apply, 'function');
 });
 
 test('client apply registers and cleans up the right-panel integration', async () => {
-  const client = await import('../lib/client.js');
+  const client = loadBuiltClient();
   const tabs = [];
   const slots = [];
   const injected = [];
