@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-product-design",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Product Design workflow suite for DeepSeek Harness: a right-side local preview panel plus a router and nine focused pd-* skills for brief, ideation, research, prototyping, audit, and design QA.",
   "type": "module",
   "main": "index.mjs",
@@ -38,7 +38,10 @@
       "inject": [
         "@deepseek-ai/dsh-client-ui-input-trigger",
         "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-sidebar-right"
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-api-workspace-files",
+        "@deepseek-ai/dsh-api-remotes"
       ]
     }
   },

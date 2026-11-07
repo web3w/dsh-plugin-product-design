@@ -7,7 +7,7 @@ const DEFINITION_ID = 'dsh-plugin-product-design/right-panel';
 
 /** Browser client module entry for DSH Desktop/Web. */
 exports.name = 'dsh-plugin-product-design-client';
-exports.inject = ['inputTriggers', 'sidebarRight', 'sidebarRightTabs', 'slots'];
+exports.inject = ['inputTriggers', 'sidebarRight', 'sidebarRightTabs', 'slots', 'remote', 'remote.workspaceFiles'];
 
 /** @param {object} ctx DSH browser client context */
 exports.apply = function apply(ctx) {
@@ -30,6 +30,13 @@ exports.apply = function apply(ctx) {
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab',
     key: DEFINITION_ID,
+    inject: (sessionId) => ({
+      sessionId,
+      listWorkspace: (path, signal) => ctx.remote.workspaceFiles.list(sessionId, path, signal),
+      statWorkspace: (path, signal) => ctx.remote.workspaceFiles.stat(sessionId, path, signal),
+      readWorkspace: (path, options, signal) => ctx.remote.workspaceFiles.readBytes(sessionId, path, options, signal),
+      readAsset: (sessionIdArg, path, options, signal) => ctx.remote.workspaceFiles.readBytes(sessionId, path, options, signal),
+    }),
   }, DesignPanel)), 'product-design: right panel body');
 
   const trigger = createProductDesignTrigger(openPanel);

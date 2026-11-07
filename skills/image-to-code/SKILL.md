@@ -25,6 +25,15 @@ Do not inspect every saved reference. Inspect only what the current task needs.
 
 CRITICAL: THIS IS NOT GUIDANCE. THIS IS A CHECKLIST TO COMPLETE.
 
+### Live design-canvas iteration
+
+If the selected target is an existing HTML board under `product-design/boards/`, treat this as a canvas iteration rather than a new standalone app:
+
+- Edit only the identified board file in place; keep its path stable so the right-side canvas detects the new file version and redraws it.
+- Keep the board self-contained with inline CSS and local-only behavior; never add a manual localhost URL or require a dev server for this preview.
+- Preserve the other direction files. If the user refers only to “the selected board” but the conversation does not identify its title/path, ask which visible board to change before writing.
+- Visually inspect the refreshed board in the panel when a capture-capable view is available; otherwise report that the source was updated but the live preview was not confirmed.
+
 1. Do not start unless you have a selected image, screenshot, mockup, generated result, or named `$pd-ideate` direction to recreate. A written brief alone is not enough.
 
 2. Resolve the exact selected visual target before building.

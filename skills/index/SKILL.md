@@ -60,8 +60,8 @@ For new app, prototype, redesign, or UI build requests without a URL, screenshot
 - `$pd-ideate` is the focused workflow.
 - Use `$pd-get-context` to resolve the minimum brief.
 - Once the target and intended user outcome are clear, play back the assumptions and run `$pd-ideate` in the same turn.
-- Show exactly three distinct directions and wait for the user to choose one.
-- Do not scaffold, edit files, or start a server before a direction is selected.
+- Render three distinct, self-contained HTML directions into `product-design/boards/` so the design canvas can show them side by side before the user chooses.
+- Keep each page self-contained (inline CSS, no CDN or external network dependency), and name each file after its direction so later chat edits can target one board.
 
 `Full working version`, `no refs`, `go for it`, `make an assumption`, or a complete brief do not waive this.
 
@@ -107,7 +107,7 @@ Capture and review a product flow, journey, screen, or multi-step product experi
 
 ### $pd-ideate
 
-Generate visual alternatives, remixes, or concept directions for a component, screen, feature, workflow, or product idea. Route here after `$pd-get-context` has played back the minimum brief and the user needs visual exploration, design variants, alternatives to an existing design, or idea discovery before choosing a visual target. Prefer this over prose-only ideation unless the user asks for prose.
+Generate visual alternatives, remixes, or concept directions for a component, screen, feature, workflow, or product idea. Route here after `$pd-get-context` has played back the minimum brief and the user needs visual exploration, design variants, alternatives to an existing design, or idea discovery before choosing a visual target. Prefer this over prose-only ideation. New UI ideation must save three self-contained HTML boards in `product-design/boards/` so the right canvas renders the actual screens side by side; do not stop at ASCII unless the user asks for text.
 
 ### $pd-url-to-code
 

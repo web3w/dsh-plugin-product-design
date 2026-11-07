@@ -309,6 +309,9 @@ test('package.json declares DSH client dependencies and built bundle', () => {
     '@deepseek-ai/dsh-client-ui-input-trigger',
     '@deepseek-ai/dsh-client-ui-renderer',
     '@deepseek-ai/dsh-client-ui-sidebar-right',
+    '@deepseek-ai/dsh-api-gateway',
+    '@deepseek-ai/dsh-api-workspace-files',
+    '@deepseek-ai/dsh-api-remotes',
   ]);
   assert.equal(pkg.exports['./client'], './lib/client.js');
   assert.ok(pkg.peerDependencies['@deepseek-ai/dsh-skill-filesystem']);
@@ -327,7 +330,7 @@ test('built browser bundle registers a lazy-CJS factory for the DSH loader', () 
   });
   assert.equal(externalCalls, 1);
   assert.equal(client.name, 'dsh-plugin-product-design-client');
-  assert.deepEqual(Array.from(client.inject), ['inputTriggers', 'sidebarRight', 'sidebarRightTabs', 'slots']);
+  assert.deepEqual(Array.from(client.inject), ['inputTriggers', 'sidebarRight', 'sidebarRightTabs', 'slots', 'remote', 'remote.workspaceFiles']);
   assert.equal(typeof client.apply, 'function');
 });
 
@@ -339,6 +342,7 @@ test('client apply registers and cleans up the right-panel integration', async (
   const sources = [];
   const opened = [];
   const cleanups = [];
+  const remoteCalls = [];
   const ctx = {
     sidebarRightTabs: { register: definition => { tabs.push(definition); return () => tabs.pop(); } },
     sidebarRight: { openTab: kind => opened.push(kind) },
@@ -347,6 +351,11 @@ test('client apply registers and cleans up the right-panel integration', async (
       register: (definition, component) => { slots.push({ definition, component }); return () => slots.pop(); },
     },
     inputTriggers: { registerSource: source => { sources.push(source); return () => sources.pop(); } },
+    remote: { workspaceFiles: {
+      list: (...args) => remoteCalls.push(['list', ...args]),
+      stat: (...args) => remoteCalls.push(['stat', ...args]),
+      readBytes: (...args) => remoteCalls.push(['readBytes', ...args]),
+    } },
     effect: effect => { const cleanup = effect(); if (typeof cleanup === 'function') cleanups.push(cleanup); },
     logger: { warn: () => {} },
   };
@@ -356,6 +365,14 @@ test('client apply registers and cleans up the right-panel integration', async (
   assert.deepEqual(injected, ['sidebar.right.pane.tab']);
   assert.equal(slots[0].definition.name, 'sidebar.right.pane.tab');
   assert.equal(slots[0].definition.key, tabs[0].id);
+  const panelProps = slots[0].definition.inject('session-test');
+  panelProps.listWorkspace('.', new AbortController().signal);
+  panelProps.statWorkspace('settings.html', new AbortController().signal);
+  panelProps.readWorkspace('settings.html', {}, new AbortController().signal);
+  panelProps.readAsset('session-test', 'theme.css', { baseFile: 'settings.html' }, new AbortController().signal);
+  assert.deepEqual(remoteCalls.map(call => call[0]), ['list', 'stat', 'readBytes', 'readBytes']);
+  assert.equal(remoteCalls[0][1], 'session-test');
+  assert.equal(remoteCalls[0][2], '.');
   assert.equal(sources.length, 1);
   assert.equal(await sources[0].matchEnter({ sessionId: 'session-test' }, '/product-design make a page', new AbortController().signal, { attachments: 0 }), undefined);
   assert.deepEqual(opened, [PANEL_KIND]);
@@ -384,14 +401,41 @@ test('right-panel preview URL accepts loopback only', () => {
   assert.throws(() => resolveLocalPreviewUrl('http://user:pass@localhost:5173'), /用户名或密码/);
 });
 
-test('design panel renders its preview workspace and guarded local URL form', () => {
+test('design panel renders an automatic multi-board canvas with preview and code controls', () => {
   const React = require('react');
   const { renderToStaticMarkup } = require('react-dom/server');
   const { DesignPanel } = require('../client/panel.cjs');
   const html = renderToStaticMarkup(React.createElement(DesignPanel));
-  assert.match(html, /产品设计面板/);
-  assert.match(html, /localhost:5173/);
-  assert.match(html, /设计预览会显示在这里/);
+  assert.match(html, /产品设计画布/);
+  assert.match(html, /多画板设计画布/);
+  assert.match(html, /画布/);
+  assert.match(html, /预览/);
+  assert.match(html, /代码/);
+  assert.match(html, /画布上/);
+});
+
+test('workspace scanner discovers nested HTML boards and ignores build directories', () => {
+  const { collectHtmlPaths, viewportOf, cssTokens, safeRelativeAsset } = require('../client/panel.cjs');
+  const paths = collectHtmlPaths({
+    '.': { entries: [
+      { name: 'index.html', type: 'file' },
+      { name: 'settings.html', type: 'file' },
+      { name: 'node_modules', type: 'directory' },
+      { name: 'product-design', type: 'directory' },
+    ] },
+    'product-design': { entries: [
+      { name: 'boards', type: 'directory' },
+      { name: 'design-system.html', type: 'file' },
+    ] },
+    'product-design/boards': { entries: [{ name: 'quiet-focus.html', type: 'file' }] },
+  });
+  assert.deepEqual(paths, ['settings.html', 'index.html', 'product-design/boards/quiet-focus.html', 'product-design/design-system.html']);
+  assert.deepEqual(viewportOf('<meta name="dsh-design-size" content="1440x1024">'), { width: 1440, height: 1024 });
+  assert.deepEqual(viewportOf('<meta name="viewport" content="width=device-width, initial-scale=1">'), { width: 390, height: 844 });
+  assert.deepEqual(cssTokens(':root{--ink:#222;--gap:12px}').map(token => token.name), ['--ink', '--gap']);
+  assert.equal(safeRelativeAsset('assets/pet.png'), true);
+  assert.equal(safeRelativeAsset('https://example.com/image.png'), false);
+  assert.equal(safeRelativeAsset('../secret.png'), false);
 });
 
 test('templates bundle ships the prototype starter', () => {

@@ -73,10 +73,12 @@ Before generating:
 - Name the gap clearly and ask whether to troubleshoot access or continue without that source.
 - Do not generate directions while silently ignoring a named reference.
 
-7. Decide the generation mode.
+7. Materialize the directions in the design canvas.
 
-- If an image-generation tool is connected to this session, generate three independent images, one per direction.
-- Otherwise produce three structured text directions. Say once, plainly, that no image-generation tool is connected, and do not pretend the text directions are rendered mockups.
+- Always create three distinct, self-contained HTML pages under `product-design/boards/`, one file per direction, using inline CSS and no CDN or remote dependencies. The workspace file watcher displays the pages automatically as real rendered boards.
+- Use the target dimensions above and include `<meta name="dsh-design-size" content="WIDTHxHEIGHT">` so the canvas can preserve the intended viewport.
+- Give each file a stable descriptive name (for example `product-design/boards/quiet-focus.html`) and include CSS custom properties for its actual palette and type tokens. Do not create ASCII art as a substitute for the rendered pages.
+- If an image-generation tool is connected, images may be used as inputs or assets; they do not replace the three HTML boards. If no image tool is connected, do not imply one was used.
 
 ## Generation Rules (images)
 
@@ -92,17 +94,14 @@ When generating images:
 - Preserve hard constraints from the brief in every image.
 - Only claim a visual reference was attached if the generation call actually received it. If you cannot attach it, say so and ask whether to continue text-only.
 
-## Generation Rules (text directions)
+## HTML board quality
 
-When no image-generation tool is connected, each text direction must be concrete enough to build and compare:
+Each direction must be an actual browser-renderable page, not an outline:
 
-- Direction name and one-line concept.
-- Layout strategy: structure of the primary screen, hierarchy, and what stays off-screen.
-- Information hierarchy: primary action, supporting actions, and content order.
-- Palette and mood: 3-5 named colors with roles, plus light/dark stance.
-- Typography: two or fewer fonts with roles, anchored to 14-16px body text.
-- Key states worth prototyping: empty, loading, error, success where relevant.
-- Why this direction is meaningfully different from the other two.
+- Show its name and a short design rationale in the assistant message, then implement the main screen with credible hierarchy, realistic spacing, readable text, and a clear primary action.
+- Keep each HTML file self-contained: inline CSS and any small JavaScript; use system fonts, CSS shapes, or inline SVG instead of external network assets.
+- Include meaningful interactive states where relevant, but keep all behavior local to the page.
+- Keep the three pages materially different in layout and visual system. Preserve user-provided product content and never copy unrelated brands or reference content.
 
 ## Design Quality Bar (both modes)
 
@@ -114,24 +113,14 @@ When no image-generation tool is connected, each text direction must be concrete
 
 ## Feedback Loop
 
-If the user gives feedback after seeing directions, generate revised directions with that feedback.
+If the user gives feedback after seeing directions, update the corresponding HTML board in place and let the canvas refresh it; do not replace all three boards for a single-board change.
 
-If the user selects a direction and gives feedback, generate a revised direction with that feedback before build.
+If the user selects a direction and gives feedback, keep that board's file path stable and iterate on the actual HTML, CSS, and local interactions.
 
-If the user likes parts of more than one direction, combine those choices into a new direction and show it before build.
+If the user likes parts of more than one direction, combine those choices into a new or explicitly named board and leave the other boards intact. When the chat does not identify which visible board is selected, ask which board title to revise rather than guessing.
 
 ## Output
 
-Wait until all requested directions exist before sending the final message that asks the user to choose.
+Create all three HTML boards before handing off. The panel reads the active Session workspace and refreshes on its own; do not ask the user to start a server, paste a port, or open a localhost URL.
 
-Number the returned directions in the order they appear in the conversation (first = 1, second = 2, third = 3). Do not name or describe the directions again in the selection message. For the default three, send only:
-
-`Which direction should I build: 1, 2, or 3? Or tell me what you'd like to refine or personalize first.`
-
-Adjust the numbers only if the user requested a different count.
-
-If the user chooses a number, acknowledge the chosen direction before routing to `$pd-image-to-code`, for example: `Building direction 2!` Do not ask for confirmation when the mapping is clear.
-
-After generating directions, stop for the user's selection before any build work begins. The selected direction is the visual target for `$pd-image-to-code`.
-
-Done means the requested number of distinct directions exist and the user has been asked to select one.
+After files are written, state that three live pages are visible on the canvas and invite the user to select one by its displayed title or ask for a concrete change. Do not repeat their long descriptions as ASCII alternatives. If they identify a direction by number, use the visible canvas order and map it to the corresponding file path. If a later chat says only “change the selected board” and no title/path is available in the conversation, ask which visible board title they mean before editing.
