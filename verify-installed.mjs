@@ -4,8 +4,8 @@
  *
  * Checks, against the real installed copy and the real host provider package:
  *   1. the plugin is registered in the desktop profile (dependency + bundle);
- *   2. the installed files are complete (shell, skills, references, scripts,
- *      templates);
+ *   2. the installed files are complete (client bundle, skills, references,
+ *      scripts, templates);
  *   3. the host's @deepseek-ai/dsh-skill-filesystem discovers exactly the ten
  *      bundled skills (one entry + nine `pd-*`) from the installed skills
  *      directory and loads every body.
@@ -91,6 +91,8 @@ const requiredPaths = [
   'cordis.patch.yml',
   'index.mjs',
   'skills.mjs',
+  'client/index.cjs',
+  'lib/client.js',
   'references/critical-overrides.md',
   'references/communication-protocol.md',
   'references/existing-codebase-edits.md',

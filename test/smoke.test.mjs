@@ -14,7 +14,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
+const require = createRequire(import.meta.url);
+const { createProductDesignTrigger, isProductDesignInvocation, PANEL_KIND } = require('../client/trigger.cjs');
+const { resolveLocalPreviewUrl } = require('../client/preview-url.cjs');
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SKILLS_DIR = join(PLUGIN_ROOT, 'skills');
 const NODE = process.execPath;
@@ -44,6 +48,11 @@ const SKILL_DIRS = [
   'design-qa',
   'share',
 ];
+
+test('filesystem peer range is limited to the DSH 0.2.2 line', () => {
+  const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'));
+  assert.equal(pkg.peerDependencies['@deepseek-ai/dsh-skill-filesystem'], '>=0.2.2-rc.1 <0.2.3');
+});
 
 function parseFrontmatter(markdown) {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(markdown);
@@ -256,12 +265,90 @@ test('index.mjs apply provides productDesign and honors enabled:false', async ()
   assert.equal(disabled.productDesign.enabled, false);
 });
 
-test('package.json declares the dsh bundle patch and peer dependency', () => {
+test('package.json declares DSH client dependencies and built bundle', () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'dsh-plugin-product-design');
   assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml');
+  assert.equal(pkg.dsh.client.platform, 'web');
+  assert.deepEqual(pkg.dsh.client.inject, [
+    '@deepseek-ai/dsh-client-ui-input-trigger',
+    '@deepseek-ai/dsh-client-ui-renderer',
+    '@deepseek-ai/dsh-client-ui-sidebar-right',
+  ]);
+  assert.equal(pkg.exports['./client'], './lib/client.js');
   assert.ok(pkg.peerDependencies['@deepseek-ai/dsh-skill-filesystem']);
   assert.ok(existsSync(join(PLUGIN_ROOT, 'cordis.patch.yml')));
+  assert.ok(existsSync(join(PLUGIN_ROOT, 'lib', 'client.js')));
+});
+
+test('built browser module loads as ESM with the DSH client contract', async () => {
+  const client = await import('../lib/client.js');
+  assert.equal(client.name, 'dsh-plugin-product-design-client');
+  assert.deepEqual(client.inject, ['inputTriggers', 'sidebarRight', 'sidebarRightTabs', 'slots']);
+  assert.equal(typeof client.apply, 'function');
+});
+
+test('client apply registers and cleans up the right-panel integration', async () => {
+  const client = await import('../lib/client.js');
+  const tabs = [];
+  const slots = [];
+  const injected = [];
+  const sources = [];
+  const opened = [];
+  const cleanups = [];
+  const ctx = {
+    sidebarRightTabs: { register: definition => { tabs.push(definition); return () => tabs.pop(); } },
+    sidebarRight: { openTab: kind => opened.push(kind) },
+    slots: {
+      inject: (slotName, register) => { injected.push(slotName); return register(); },
+      register: (definition, component) => { slots.push({ definition, component }); return () => slots.pop(); },
+    },
+    inputTriggers: { registerSource: source => { sources.push(source); return () => sources.pop(); } },
+    effect: effect => { const cleanup = effect(); if (typeof cleanup === 'function') cleanups.push(cleanup); },
+    logger: { warn: () => {} },
+  };
+  client.apply(ctx);
+  assert.equal(tabs[0].kind, PANEL_KIND);
+  assert.equal(tabs[0].priority, 'extension');
+  assert.deepEqual(injected, ['sidebar.right.pane.tab']);
+  assert.equal(slots[0].definition.name, 'sidebar.right.pane.tab');
+  assert.equal(slots[0].definition.key, tabs[0].id);
+  assert.equal(sources.length, 1);
+  assert.equal(await sources[0].matchEnter({ sessionId: 'session-test' }, '/product-design make a page', new AbortController().signal, { attachments: 0 }), undefined);
+  assert.deepEqual(opened, [PANEL_KIND]);
+  for (const cleanup of cleanups.reverse()) cleanup();
+  assert.deepEqual([tabs.length, slots.length, sources.length], [0, 0, 0]);
+});
+
+test('product-design trigger opens the panel without claiming skill submission', async () => {
+  const opened = [];
+  const trigger = createProductDesignTrigger(() => opened.push(PANEL_KIND));
+  assert.deepEqual(await trigger.candidates({ sessionId: 'session-test' }, { query: 'product-design' }), []);
+  assert.equal(trigger.matchSpace({ sessionId: 'session-test' }, '/product-design'), undefined);
+  assert.equal(await trigger.matchEnter({ sessionId: 'session-test' }, '/product-design make a settings page'), undefined);
+  assert.deepEqual(opened, [PANEL_KIND, PANEL_KIND]);
+  assert.equal(await trigger.matchEnter({ sessionId: 'session-test' }, 'please /product-design'), undefined);
+  assert.equal(await trigger.matchEnter({ sessionId: 'session-test' }, '/product-designer'), undefined);
+  assert.equal(opened.length, 2);
+});
+
+test('right-panel preview URL accepts loopback only', () => {
+  assert.equal(resolveLocalPreviewUrl('localhost:5173'), 'http://localhost:5173/');
+  assert.equal(resolveLocalPreviewUrl('https://127.0.0.1:4173/demo'), 'https://127.0.0.1:4173/demo');
+  assert.equal(resolveLocalPreviewUrl('http://[::1]:5173/'), 'http://[::1]:5173/');
+  assert.throws(() => resolveLocalPreviewUrl('https://example.com'), /localhost/);
+  assert.throws(() => resolveLocalPreviewUrl('javascript:alert(1)'));
+  assert.throws(() => resolveLocalPreviewUrl('http://user:pass@localhost:5173'), /用户名或密码/);
+});
+
+test('design panel renders its preview workspace and guarded local URL form', () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const { DesignPanel } = require('../client/panel.cjs');
+  const html = renderToStaticMarkup(React.createElement(DesignPanel));
+  assert.match(html, /产品设计面板/);
+  assert.match(html, /localhost:5173/);
+  assert.match(html, /设计预览会显示在这里/);
 });
 
 test('templates bundle ships the prototype starter', () => {

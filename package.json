@@ -1,11 +1,17 @@
 {
   "name": "dsh-plugin-product-design",
-  "version": "0.1.4",
-  "description": "Product Design workflow suite for DeepSeek Harness: a router plus nine focused pd-* skills that carry early product ideas through a minimum design brief, three distinct visual directions, evidence-grounded UX research and flow audits, faithful URL cloning, responsive frontend builds, and a blocking design-QA gate before handoff. Ships an isolated skill provider, a prototype bootstrap script, Node user-context scripts, and a minimal Vite starter template.",
+  "version": "0.2.0",
+  "description": "Product Design workflow suite for DeepSeek Harness: a right-side local preview panel plus a router and nine focused pd-* skills for brief, ideation, research, prototyping, audit, and design QA.",
   "type": "module",
   "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./lib/client.js"
+  },
   "files": [
     "index.mjs",
+    "client/",
+    "lib/client.js",
     "skills.mjs",
     "skills/",
     "references/",
@@ -26,14 +32,29 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-input-trigger",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
     }
   },
   "scripts": {
-    "check": "node --check index.mjs && node --check skills.mjs && node --check scripts/bootstrap-prototype.mjs && node --check skills/user-context/scripts/user-context-preflight.mjs && node --check skills/user-context/scripts/user-context-init.mjs",
+    "build:client": "esbuild client/entry.mjs --bundle --platform=browser --format=esm --external:react --banner:js=\"import React from 'react'; const require = (id) => id === 'react' ? React : (() => { throw new Error('Unexpected external module: ' + id); })();\" --outfile=lib/client.js",
+    "build": "npm run build:client && npm run check",
+    "check": "node --check index.mjs && node --check skills.mjs && node --check client/entry.mjs && node --check client/index.cjs && node --check client/panel.cjs && node --check client/preview-url.cjs && node --check client/trigger.cjs && node --check lib/client.js && node --check scripts/bootstrap-prototype.mjs && node --check skills/user-context/scripts/user-context-preflight.mjs && node --check skills/user-context/scripts/user-context-init.mjs",
     "test": "node --test test/smoke.test.mjs"
   },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
   "peerDependencies": {
-    "@deepseek-ai/dsh-skill-filesystem": ">=0.1.2-0 <0.2.0 || >=0.1.5-rc.1 <0.1.6"
+    "@deepseek-ai/dsh-skill-filesystem": ">=0.2.2-rc.1 <0.2.3"
   },
   "engines": {
     "node": "^22.19.0 || >=24"

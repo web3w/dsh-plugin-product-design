@@ -68,10 +68,11 @@ foreach ($file in $files) {
   $from = Join-Path $Source $file
   if (Test-Path $from) { Copy-Item $from (Join-Path $Target $file) -Force }
 }
-# bundled content directories (recursive). Remove-then-copy keeps re-runs
-# idempotent: Copy-Item into an EXISTING directory would nest the source
-# inside it (skills\skills) and leave stale files behind.
-$dirs = @('skills', 'references', 'scripts', 'templates')
+# bundled content directories (recursive), including the browser client source
+# and built lib/client.js required by DSH's web client module loader.
+# Remove-then-copy keeps re-runs idempotent: Copy-Item into an EXISTING
+# directory would nest the source inside it (skills\skills) and leave stale files behind.
+$dirs = @('skills', 'references', 'scripts', 'templates', 'client', 'lib')
 foreach ($dir in $dirs) {
   $from = Join-Path $Source $dir
   $to = Join-Path $Target $dir
